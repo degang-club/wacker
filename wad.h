@@ -5,6 +5,10 @@
 
 #define WAD_MAGIC "WAD3"
 
+#define WAD_TEXTURE_TYPE_QPIC 	0x42
+#define WAD_TEXTURE_TYPE_MIPTEX 0x43
+#define WAD_TEXTURE_TYPE_FONT 	0x45
+
 typedef struct {
 	uint32_t texture_offset;
 	
@@ -47,7 +51,7 @@ typedef struct {
 	uint32_t textures_count;
 	uint32_t lumps_offset;
 	WAD_TEXTURE **textures;
-	WAD_LUMP_ITEM *lumps;
+	WAD_LUMP_ITEM **lumps;
 } WAD;
 
 void wad_init(WAD *wad);
