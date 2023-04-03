@@ -1,0 +1,21 @@
+# This is a makefile for compiling wacker with Cosmopolitan
+# Clone Cosmopolitan into /opt/cosmo and build it.
+
+CC=/opt/cosmo/tool/scripts/cosmocc
+CFLAGS=-g -static -std=c11 -Wall -pedantic -I. -lm
+LDFLAGS=-L/usr/lib
+OBJS=wacker.o tga.o wad.o
+
+all: wacker.com
+
+%.o: %.c
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+wacker.com: $(OBJS)
+	$(CC) -o $@.dbg $(OBJS) $(CFLAGS)
+	objcopy -S -O binary $@.dbg $@
+
+.PHONY: clean
+
+clean:
+	$(RM) *.o *.dbg wacker wacker.com
