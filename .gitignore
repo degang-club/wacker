@@ -2,3 +2,6 @@
 wacker
 *.kdev4
 *.wad
+*.vscode
+*.exe
+*.stackdump

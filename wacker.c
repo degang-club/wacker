@@ -1,4 +1,6 @@
+#include <dirent.h>
 #include <float.h>
+#include <stdarg.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +14,43 @@
 #define RED 0
 #define GREEN 1
 #define BLUE 2
+
+const char tga_extension[] = ".tga";
+
+char* strcomb(unsigned int num, ...)
+{
+    va_list valist;
+
+    char *combined_str;
+    unsigned int combined_str_s = 1;
+
+    char *tmp_str;
+    unsigned int i;
+
+    va_start(valist, num);
+    combined_str = calloc(1, sizeof(char));
+
+    for (i = 0; i < num; i++) {
+        tmp_str = va_arg(valist, char*);
+
+        combined_str_s += strlen(tmp_str);
+        combined_str = realloc(combined_str, combined_str_s);
+
+        strcat(combined_str, tmp_str);
+    }
+    va_end(valist);
+
+    return combined_str;
+}
+
+char *substr(char *start, char *end) {
+	int length = end - start;
+	char *sub = calloc(length + 1, sizeof(char));
+	strncpy(sub, start, length);
+	sub[length] = '\0';
+	return sub;
+}
+
 
 void sample_colormap(uint16_t *average, uint32_t pixel_index, uint32_t width, uint8_t *src, uint8_t *color_map, uint8_t color_channel) {
 	*average += color_map[src[pixel_index			 ] * 3 + color_channel];
@@ -49,7 +88,7 @@ void generate_mipmap(uint8_t *dst, uint8_t *src, uint8_t *color_map, uint16_t *c
 					break;
 				}
 			}
-			
+
 			// Check for closest color in color pallete when exact color was not found and the color pallete is full
 			if (i == 256) { /* Make sure that 'i' is the correct variable to check*/
 				previous_squared_distance = DBL_MAX;
@@ -86,7 +125,11 @@ void add_tga_to_wad(WAD *wad, TGA *tga, char *name)
 	int mipmap_3_size = 0;
 	static int texture_count = 0;
 
-	wad->textures = realloc(wad->textures, sizeof(&wad->textures));
+	if (texture_count == 0) {
+        wad->textures = malloc(sizeof(&wad->textures));
+    } else {
+        wad->textures = realloc(wad->textures, sizeof(&wad->textures));
+    }
 	wad->textures[texture_count] = malloc(sizeof(WAD_TEXTURE));
 
 	color_map_size = tga->mapSpec.entryLength;
@@ -142,15 +185,61 @@ void add_tga_to_wad(WAD *wad, TGA *tga, char *name)
 	wad->textures_count = texture_count;
 }
 
-int main()
-{
+void convert_tga_to_wad(WAD *wad, char *file_path, char *file_name) {
 	TGA tga;
-	tga_load_file(&tga, "test_3.tga");
-	//tga_print_debug(&tga);
-
-	WAD wad;
-	add_tga_to_wad(&wad, &tga, "{test");
-	printf("%s\n", wad.textures[0]->texture_name);
-	return 0;
+	tga_load_file(&tga, file_path);
+	add_tga_to_wad(wad, &tga, file_name);
 }
 
+int main(int argc, char *argv[])
+{
+	//if(argc > 2) return 1; // Do not call when more than 2 args
+
+	// Use root when nothing supplied
+	char *dir_path = "./";
+
+	// Use path as argument
+	if(argc == 2) { 
+		dir_path = strcat(argv[1], "/"); // Always add extra '/' to complete path to file
+	}
+	printf("Dir path: %s\n\n", dir_path);
+	
+	// Open dir
+	DIR *dir = opendir(dir_path);
+	struct dirent *entry;
+	if(dir == NULL) {
+		printf("Could not open provided directory!");
+		return 1;
+	}
+
+	char *file_path;
+	char *file_name;
+	char *extension_start;
+
+	WAD wad = wad_init();
+
+	// Find all .tga files in dir
+	while((entry = readdir(dir)) != NULL) {
+		extension_start = strrchr(entry->d_name, '.'); // Find last '.' to get extension 
+		if(extension_start == NULL) continue;
+
+		// Load tga into wad when it is a tga file
+		if(strcmp(extension_start, tga_extension) == 0){
+			file_path = strcomb(2, dir_path, entry->d_name);
+			file_name = substr(entry->d_name, extension_start);
+
+			convert_tga_to_wad(&wad, file_path, file_name);
+			printf("tga file added to wad: %s\n", file_path);
+		}
+	}
+
+	if(closedir(dir) == -1) {
+		printf("Failed to close directory!");
+		return 1;
+	}
+
+	wad_update(&wad);
+	wad_save_file(&wad, "./output.wad");
+
+	return 0;
+}
