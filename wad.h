@@ -54,10 +54,12 @@ typedef struct {
 	WAD_LUMP_ITEM **lumps;
 } WAD;
 
-void wad_init(WAD *wad);
+WAD wad_init(void);
 
-void wad_free(WAD *wad);
+int wad_update(WAD *wad);
 
 int wad_save_file(WAD *wad, char *path);
+
+void wad_free(WAD *wad);
 
 #endif // WAD_H_INCLUDED

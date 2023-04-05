@@ -47,6 +47,8 @@ typedef struct {
 
 int tga_load_file(TGA *tga, char *path);
 
+void tga_free(TGA *tga);
+
 void tga_print_debug(TGA *tga);
 
 #endif // TGA_H_INCLUDED

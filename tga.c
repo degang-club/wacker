@@ -38,6 +38,12 @@ int tga_load_file(TGA *tga, char *path)
 	return 0;
 }
 
+void tga_free(TGA *tga)
+{
+	free(tga->colorMapData);
+	free(tga->imageData);
+}
+
 void tga_print_debug(TGA *tga)
 {
 	int i;
