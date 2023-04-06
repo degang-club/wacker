@@ -1,7 +1,8 @@
 #include <dirent.h>
 #include <float.h>
-#include <stdarg.h>
+#include <getopt.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -194,15 +195,36 @@ void convert_tga_to_wad(WAD *wad, char *file_path, char *file_name) {
 
 int main(int argc, char *argv[])
 {
-	//if(argc > 2) return 1; // Do not call when more than 2 args
+	int opt;
+	char *dir_path = "./"; // Use root when nothing supplied
+	char *output_file = "./output.wad";
+	char *file_path;
+	char *file_name;
+	char *extension_start;
 
-	// Use root when nothing supplied
-	char *dir_path = "./";
-
-	// Use path as argument
-	if(argc == 2) { 
-		dir_path = strcat(argv[1], "/"); // Always add extra '/' to complete path to file
+	while ((opt = getopt(argc, argv, "d:o:")) != -1) {
+	switch (opt) {
+		case 'd':
+			dir_path = optarg;
+			break;
+		case 'o':
+			output_file = optarg;
+			break;
+		case 'h': /* Add help function here */
+			exit(0);
+			break;
+		case '?':
+			exit(1);
+			break;
+		default:
+			fprintf(stderr, "No options given\n");
+			exit(1);
+		}
 	}
+
+	// Always add extra '/' to complete path to file
+	if (dir_path[strlen(dir_path) - 1] != '/')
+		dir_path = strcat(dir_path, "/");
 	printf("Dir path: %s\n\n", dir_path);
 	
 	// Open dir
@@ -212,10 +234,6 @@ int main(int argc, char *argv[])
 		printf("Could not open provided directory!");
 		return 1;
 	}
-
-	char *file_path;
-	char *file_name;
-	char *extension_start;
 
 	WAD wad = wad_init();
 
@@ -240,7 +258,7 @@ int main(int argc, char *argv[])
 	}
 
 	wad_update(&wad);
-	wad_save_file(&wad, "./output.wad");
+	wad_save_file(&wad, output_file);
 
 	return 0;
 }
