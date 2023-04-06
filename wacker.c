@@ -126,10 +126,11 @@ void add_tga_to_wad(WAD *wad, TGA *tga, char *name)
 	static int texture_count = 0;
 
 	if (texture_count == 0) {
-        wad->textures = malloc(sizeof(&wad->textures));
-    } else {
-        wad->textures = realloc(wad->textures, sizeof(&wad->textures));
-    }
+        	wad->textures = malloc(sizeof(wad->textures));
+    	} else {
+        	wad->textures = realloc(wad->textures, sizeof(wad->textures) * (wad->textures_count + 1));
+    	}
+	
 	wad->textures[texture_count] = malloc(sizeof(WAD_TEXTURE));
 
 	color_map_size = tga->mapSpec.entryLength;
