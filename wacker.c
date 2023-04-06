@@ -141,7 +141,7 @@ void add_tga_to_wad(WAD *wad, TGA *tga, char *name)
 	wad->textures[texture_count]->height = tga->imageSpec.height;
 
 	/* Convert TGA color map to a WAD3 color map */
-	for (uint8_t i=0; i < tga->mapSpec.entryLength; i++) {
+	for (uint16_t i=0; i < tga->mapSpec.entryLength; i++) {
 		wad->textures[texture_count]->color_map[i * 3 + RED  ] = tga->colorMapData[i].red;
 		wad->textures[texture_count]->color_map[i * 3 + GREEN] = tga->colorMapData[i].green;
 		wad->textures[texture_count]->color_map[i * 3 + BLUE ] = tga->colorMapData[i].blue;
