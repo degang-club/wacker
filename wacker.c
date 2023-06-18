@@ -6,7 +6,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tga.h"
+#include <libafbeelding/img.h>
+#include <libafbeelding/scale.h>
+#include <libafbeelding/tga.h>
 #include "wad.h"
 
 #define COORDS_TO_INDEX(x, y, width) (y * width + x)
@@ -52,145 +54,83 @@ char *substr(char *start, char *end) {
 	return sub;
 }
 
-
-void sample_colormap(uint16_t *average, uint32_t pixel_index, uint32_t width, uint8_t *src, uint8_t *color_map, uint8_t color_channel) {
-	*average += color_map[src[pixel_index			 ] * 3 + color_channel];
-	*average += color_map[src[pixel_index + 1		 ] * 3 + color_channel];
-	*average += color_map[src[pixel_index + width	 ] * 3 + color_channel];
-	*average += color_map[src[pixel_index + width + 1] * 3 + color_channel];
-	*average /= 4;
-}
-
-void generate_mipmap(uint8_t *dst, uint8_t *src, uint8_t *color_map, uint16_t *color_map_size, uint32_t width, uint32_t height)
+void add_img_to_wad(WAD *wad, IMAGE *img, char *name)
 {
-	int i;
-	uint32_t x, y;
-	uint16_t red_average, green_average, blue_average;
-	uint8_t smallest_distance_index;
-	double current_squared_distance, previous_squared_distance;
-
-	uint16_t mip_height = height / 2, mip_width = width / 2;
-
-	for (y=0; y < mip_height; y++) {
-		for (x=0; x < mip_width; x++) {
-			red_average = green_average = blue_average = 0;
-
-			uint32_t src_pixel_index = COORDS_TO_INDEX(x * 2, y * 2, width);
-			uint32_t mip_pixel_index = COORDS_TO_INDEX(x, y, mip_width);
-
-			sample_colormap(&red_average, 	src_pixel_index, width, src, color_map, RED);
-			sample_colormap(&green_average, src_pixel_index, width, src, color_map, GREEN);
-			sample_colormap(&blue_average, 	src_pixel_index, width, src, color_map, BLUE);
-
-			// Check if color is present in the color pallete
-			for (i=0; i < *color_map_size; i++) {
-				if (red_average == color_map[i * 3 + RED] && green_average == color_map[i * 3 + GREEN] && blue_average == color_map[i * 3 + BLUE]) {
-					dst[mip_pixel_index] = i;
-					break;
-				}
-			}
-
-			// Check for closest color in color pallete when exact color was not found and the color pallete is full
-			if (i == 256) { /* Make sure that 'i' is the correct variable to check*/
-				previous_squared_distance = DBL_MAX;
-
-				for (i=0; i < *color_map_size; i++) {
-					current_squared_distance =
-						  pow(red_average - color_map[i * 3 + RED], 2)
-						+ pow(green_average - color_map[i * 3 + GREEN], 2)
-						+ pow(blue_average - color_map[i * 3 + BLUE], 2);
-					if ( current_squared_distance < previous_squared_distance) {
-						previous_squared_distance = current_squared_distance;
-						smallest_distance_index = i;
-					}
-				}
-				dst[mip_pixel_index] = smallest_distance_index;
-			// Add color to color pallete
-			} else if (i == *color_map_size) {
-				color_map[*color_map_size * 3 + RED] 	= red_average;
-				color_map[*color_map_size * 3 + GREEN] 	= green_average;
-				color_map[*color_map_size * 3 + BLUE] 	= blue_average;
-				dst[mip_pixel_index] = *color_map_size;
-				*color_map_size += 1; /* Can't do *color_map_index++, because of an unused variable warning*/
-			}
-		}
-	}
-}
-
-void add_tga_to_wad(WAD *wad, TGA *tga, char *name)
-{
-	uint16_t color_map_size = 0;
 	int image_size = 0;
-	int mipmap_1_size = 0;
-	int mipmap_2_size = 0;
-	int mipmap_3_size = 0;
-	static int texture_count = 0;
+	int img_mipmap_1_size = 0;
+	int img_mipmap_2_size = 0;
+	int img_mipmap_3_size = 0;
+	IMAGE img_mipmap_1;
+	IMAGE img_mipmap_2;
+	IMAGE img_mipmap_3;
 
-	if (texture_count == 0) {
-        	wad->textures = malloc(sizeof(wad->textures));
-    	} else {
-        	wad->textures = realloc(wad->textures, sizeof(wad->textures) * (wad->textures_count + 1));
-    	}
+	if (wad->textures_count == 0) {
+		wad->textures = malloc(sizeof(wad->textures));
+	} else {
+		wad->textures = realloc(wad->textures, sizeof(wad->textures) * (wad->textures_count + 1));
+	}
 	
-	wad->textures[texture_count] = malloc(sizeof(WAD_TEXTURE));
-
-	color_map_size = tga->mapSpec.entryLength;
+	wad->textures[wad->textures_count] = malloc(sizeof(WAD_TEXTURE));
 
 	/* Copy the name, width and height to the WAD3 texture */
-	strncpy(wad->textures[texture_count]->texture_name, name, sizeof(wad->textures[texture_count]->texture_name));
-	wad->textures[texture_count]->width = tga->imageSpec.width;
-	wad->textures[texture_count]->height = tga->imageSpec.height;
+	strncpy(wad->textures[wad->textures_count]->texture_name, name, sizeof(wad->textures[wad->textures_count]->texture_name));
+	wad->textures[wad->textures_count]->width = img->width;
+	wad->textures[wad->textures_count]->height = img->height;
 
 	/* Convert TGA color map to a WAD3 color map */
-	for (uint16_t i=0; i < tga->mapSpec.entryLength; i++) {
-		wad->textures[texture_count]->color_map[i * 3 + RED  ] = tga->colorMapData[i].red;
-		wad->textures[texture_count]->color_map[i * 3 + GREEN] = tga->colorMapData[i].green;
-		wad->textures[texture_count]->color_map[i * 3 + BLUE ] = tga->colorMapData[i].blue;
+	for (uint16_t i=0; i < img->palette.size; i++) {
+		wad->textures[wad->textures_count]->color_map[i * 3 + RED  ] = afb_rgba_get_r(img->palette.colors[i]);
+		wad->textures[wad->textures_count]->color_map[i * 3 + GREEN] = afb_rgba_get_g(img->palette.colors[i]);
+		wad->textures[wad->textures_count]->color_map[i * 3 + BLUE ] = afb_rgba_get_b(img->palette.colors[i]);
 	}
 
 	/* Allocate memory for image and copy from TGA file */
-	image_size = wad->textures[texture_count]->width * wad->textures[texture_count]->height;
-	wad->textures[texture_count]->image_data = malloc(image_size);
-	memcpy(wad->textures[texture_count]->image_data, tga->imageData, image_size);
+	image_size = wad->textures[wad->textures_count]->width * wad->textures[wad->textures_count]->height;
+	wad->textures[wad->textures_count]->image_data = malloc(image_size);
+	memcpy(wad->textures[wad->textures_count]->image_data, img->image_data, image_size);
 
-	/* Allocate memory for mipmap 1 */
-	mipmap_1_size = image_size / 4;
-	wad->textures[texture_count]->mipmap_1_data = malloc(mipmap_1_size);
-	generate_mipmap(wad->textures[texture_count]->mipmap_1_data,
-				wad->textures[texture_count]->image_data,
-				wad->textures[texture_count]->color_map,
-				&color_map_size,
-				wad->textures[texture_count]->width,
-				wad->textures[texture_count]->height);
+	/* Copy and scale mipmap 1 */
+	img_mipmap_1 = afb_copy_image(img);
+	afb_scale_nearest_neighbor(&img_mipmap_1, img->width / 2, img->height / 2);
+	
+	/* Copy to WAD struct */
+	img_mipmap_1_size = img_mipmap_1.width * img_mipmap_1.height;
+	wad->textures[wad->textures_count]->mipmap_1_data = malloc(img_mipmap_1_size);
+	memcpy(wad->textures[wad->textures_count]->mipmap_1_data, img_mipmap_1.image_data, img_mipmap_1_size);
+	
+	
+	/* Copy and scale mipmap 2 */
+	img_mipmap_2 = afb_copy_image(img);
+	afb_scale_nearest_neighbor(&img_mipmap_2, img->width / 2, img->height / 2);
+	
+	/* Copy to WAD struct */
+	img_mipmap_2_size = img_mipmap_2.width * img_mipmap_2.height;
+	wad->textures[wad->textures_count]->mipmap_2_data = malloc(img_mipmap_2_size);
+	memcpy(wad->textures[wad->textures_count]->mipmap_2_data, img_mipmap_2.image_data, img_mipmap_2_size);
 
-	/* Allocate memory for mipmap 2 */
-	mipmap_2_size = mipmap_1_size / 4;
-	wad->textures[texture_count]->mipmap_2_data = malloc(mipmap_2_size);
-	generate_mipmap(wad->textures[texture_count]->mipmap_2_data,
-				wad->textures[texture_count]->mipmap_1_data,
-				wad->textures[texture_count]->color_map,
-				&color_map_size,
-				wad->textures[texture_count]->width / 2,
-				wad->textures[texture_count]->height / 2);
+	
+	/* Copy and scale mipmap 3 */
+	img_mipmap_3 = afb_copy_image(img);
+	afb_scale_nearest_neighbor(&img_mipmap_3, img->width / 2, img->height / 2);
+	
+	/* Copy to WAD struct */
+	img_mipmap_3_size = img_mipmap_3.width * img_mipmap_3.height;
+	wad->textures[wad->textures_count]->mipmap_3_data = malloc(img_mipmap_3_size);
+	memcpy(wad->textures[wad->textures_count]->mipmap_3_data, img_mipmap_3.image_data, img_mipmap_3_size);
 
-	/* Allocate memory for mipmap 3 */
-	mipmap_3_size = mipmap_2_size / 4;
-	wad->textures[texture_count]->mipmap_3_data = malloc(mipmap_3_size);
-	generate_mipmap(wad->textures[texture_count]->mipmap_3_data,
-				wad->textures[texture_count]->mipmap_2_data,
-				wad->textures[texture_count]->color_map,
-				&color_map_size,
-				wad->textures[texture_count]->width / 4,
-				wad->textures[texture_count]->height / 4);
-
-	texture_count++;
-	wad->textures_count = texture_count;
+	wad->textures_count++;
+	
+	afb_image_free(&img_mipmap_1);
+	afb_image_free(&img_mipmap_2);
+	afb_image_free(&img_mipmap_3);
 }
 
-void convert_tga_to_wad(WAD *wad, char *file_path, char *file_name) {
-	TGA tga;
-	tga_load_file(&tga, file_path);
-	add_tga_to_wad(wad, &tga, file_name);
+int convert_tga_to_wad(WAD *wad, char *file_path, char *file_name) {
+	IMAGE img;
+	if (tga_load_file(&img, file_path) != AFB_E_SUCCESS)
+		return 1;
+	add_img_to_wad(wad, &img, file_name);
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -247,8 +187,10 @@ int main(int argc, char *argv[])
 			file_path = strcomb(2, dir_path, entry->d_name);
 			file_name = substr(entry->d_name, extension_start);
 
-			convert_tga_to_wad(&wad, file_path, file_name);
-			printf("tga file added to wad: %s\n", file_path);
+			if (convert_tga_to_wad(&wad, file_path, file_name) > 0)
+				printf("Could not add file %s to WAD\n", file_path);
+			else
+				printf("tga file added to wad: %s\n", file_path);
 		}
 	}
 

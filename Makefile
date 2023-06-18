@@ -1,7 +1,7 @@
 CC=gcc
-CFLAGS=-g -static -std=c11 -Wall -pedantic -I. -lm
+CFLAGS=-g -static -std=c11 -Wall -pedantic -I. -lm -lafbeelding
 LDFLAGS=-L/usr/lib
-OBJS=wacker.o tga.o wad.o
+OBJS=wacker.o wad.o
 
 all: wacker
 
