@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,23 +6,22 @@
 
 WAD wad_init(void)
 {
-	return (WAD){.textures_count = 0, .lumps_offset = 0, .textures = 0, .lumps = 0};
+	return (WAD){.textures_count = 0, .lumps_offset = 0, .textures = 0, .lumps = NULL};
 }
 
 int wad_update(WAD *wad)
 {
-	int i;
 	uint64_t image_size;
 
 	wad->lumps_offset = 0x0c;
 
 	/* Allocate memory for the lumps */
-	if (!wad->lumps)
-		wad->lumps = malloc(sizeof(&wad->lumps) * wad->textures_count);
-	else
+	if (wad->lumps != NULL)
 		return 1; /* Do something here to be able to update the lumps multiple times */
 
-	for (i=0; i < wad->textures_count; i++) {
+	wad->lumps = malloc(sizeof(&wad->lumps) * wad->textures_count);
+
+	for (unsigned int i=0; i < wad->textures_count; i++) {
 		wad->lumps[i] = malloc(sizeof(WAD_LUMP_ITEM));
 
 		wad->lumps[i]->texture_offset = wad->lumps_offset;
@@ -33,9 +33,9 @@ int wad_update(WAD *wad)
 			+ 4 + 4 /* Width and height */
 			+ 4 + 4 + 4 + 4 /* The offsets */
 			+ image_size
-			+ image_size / 4
-			+ image_size / 16
-			+ image_size / 64
+			+ (image_size / 4)
+			+ (image_size / 16)
+			+ (image_size / 64)
 			+ 1 + 1 /* The two unknown bytes */
 			+ 768 /* The color map */
 			+ 2 /* Padding */;
@@ -63,18 +63,38 @@ int wad_update(WAD *wad)
 	return 0;
 }
 
+// int wad_open_file(WAD *wad, char *path)
+// {
+// 	FILE *f;
+// 	char *magic_buff[4];
+// 
+// 	/* Check if there are lumps */
+// 	if (!wad->lumps) {
+// 		return 1;
+// 	}
+// 
+// 	f = fopen(path, "r");
+// 
+// 	fread(magic_buff, 4, 1, f);
+// 
+// 	if (strcmp(magic_buff, WAD_MAGIC) != 0) {
+// 		printf("Not a WAD3 file\n");
+// 		return 1;
+// 	}
+// }
+
 /* NOTE This code will probably create bad WAD files on big-endian systems */
-int wad_save_file(WAD *wad, char *path) {
+int wad_save_file(WAD *wad, char *path)
+{
 	FILE *f;
-	int i;
 	uint64_t image_size;
 	
 	/* Check if there are lumps */
-	if (!wad->lumps) {
+	if (wad->lumps == NULL)
 		return 1;
-	}
 
-	f = fopen(path, "w");
+	if ((f = fopen(path, "w")) == NULL)
+		return 1;
 
 	fwrite(WAD_MAGIC, 4, 1, f);
 	fwrite(&wad->textures_count, sizeof(wad->textures_count), 1, f);
@@ -82,7 +102,7 @@ int wad_save_file(WAD *wad, char *path) {
 	/* We need to set this after we've gone through all the textures, then we'll know where the lumps begin */
 	fwrite(&wad->lumps_offset, sizeof(wad->lumps_offset), 1, f); 
 
-	for (i=0; i < wad->textures_count; i++) {
+	for (unsigned int i=0; i < wad->textures_count; i++) {
 		fwrite(wad->textures[i]->texture_name, 16, 1, f);
 		fwrite(&wad->textures[i]->width, sizeof(wad->textures[i]->width), 1, f);
 		fwrite(&wad->textures[i]->height, sizeof(wad->textures[i]->height), 1, f);
@@ -111,10 +131,10 @@ int wad_save_file(WAD *wad, char *path) {
 		/* Write padding (2 bytes) */
 		fwrite(&wad->textures[i]->padding, sizeof(wad->textures[i]->padding), 1, f);
 
-		memcpy(wad->lumps[i]->texture_name, wad->textures[i]->texture_name, sizeof(wad->textures[i]->texture_name));
+		memcpy(wad->lumps[i]->texture_name, wad->textures[i]->texture_name, 16);
 	}
 
-	for (i=0; i < wad->textures_count; i++) {
+	for (unsigned int i=0; i < wad->textures_count; i++) {
 		fwrite(&wad->lumps[i]->texture_offset, sizeof(wad->lumps[i]->texture_offset), 1, f);
 
 		fwrite(&wad->lumps[i]->texture_compressed_size, sizeof(wad->lumps[i]->texture_compressed_size), 1, f);
@@ -135,7 +155,7 @@ int wad_save_file(WAD *wad, char *path) {
 
 void wad_free(WAD *wad)
 {
-	for (int i=0; i < wad->textures_count; i++) {
+	for (unsigned int i=0; i < wad->textures_count; i++) {
 		free(wad->lumps[i]);
 		free(wad->textures[i]);
 	}
