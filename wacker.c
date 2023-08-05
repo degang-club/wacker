@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <libafbeelding/color_quantization.h>
 #include <libafbeelding/img.h>
 #include <libafbeelding/scale.h>
 #include <libafbeelding/format-tga.h>
@@ -21,6 +22,7 @@ int add_img_to_wad(WAD *wad, char *img_file_path, char *name)
 	int img_mipmap_1_size = 0;
 	int img_mipmap_2_size = 0;
 	int img_mipmap_3_size = 0;
+	AFB_PALETTE pal = afb_palette_init();
 	AFB_IMAGE img;
 	AFB_IMAGE img_mipmap_1;
 	AFB_IMAGE img_mipmap_2;
@@ -28,6 +30,15 @@ int add_img_to_wad(WAD *wad, char *img_file_path, char *name)
 
 	if (afb_format_tga_load(&img, img_file_path) != AFB_E_SUCCESS)
 		return 1;
+
+	if (img.image_type == GRAYSCALE) {
+		// We can pass NULL here since we're 100% sure that this image
+		// is grayscale
+		image_to_pal(&img, NULL);
+	} else if (img.image_type == TRUECOLOR) {
+		pal = afb_quantize_median_cut(img, 256);
+		image_to_pal(&img, &pal);
+	}
 
 	if (wad->textures_count == 0) {
 		wad->textures = malloc(sizeof(wad->textures));
@@ -42,7 +53,7 @@ int add_img_to_wad(WAD *wad, char *img_file_path, char *name)
 	wad->textures[wad->textures_count]->width = img.width;
 	wad->textures[wad->textures_count]->height = img.height;
 
-	/* Convert TGA color map to a WAD3 color map */
+	/* Convert color map to a WAD3 color map */
 	for (uint16_t i=0; i < img.palette.size; i++) {
 		wad->textures[wad->textures_count]->color_map[i * 3 + RED  ] = afb_rgba_get_r(img.palette.colors[i]);
 		wad->textures[wad->textures_count]->color_map[i * 3 + GREEN] = afb_rgba_get_g(img.palette.colors[i]);
@@ -66,7 +77,7 @@ int add_img_to_wad(WAD *wad, char *img_file_path, char *name)
 	
 	/* Copy and scale mipmap 2 */
 	img_mipmap_2 = afb_copy_image(&img);
-	afb_scale_nearest_neighbor(&img_mipmap_2, img.width / 2, img.height / 2);
+	afb_scale_nearest_neighbor(&img_mipmap_2, img.width / 4, img.height / 4);
 	
 	/* Copy to WAD struct */
 	img_mipmap_2_size = img_mipmap_2.width * img_mipmap_2.height;
@@ -76,7 +87,7 @@ int add_img_to_wad(WAD *wad, char *img_file_path, char *name)
 	
 	/* Copy and scale mipmap 3 */
 	img_mipmap_3 = afb_copy_image(&img);
-	afb_scale_nearest_neighbor(&img_mipmap_3, img.width / 2, img.height / 2);
+	afb_scale_nearest_neighbor(&img_mipmap_3, img.width / 8, img.height / 8);
 	
 	/* Copy to WAD struct */
 	img_mipmap_3_size = img_mipmap_3.width * img_mipmap_3.height;
