@@ -144,6 +144,19 @@ void pack_wad(char *output_file, char **input_files, unsigned int input_files_si
 		printf("save file error\n");
 }
 
+void list_wad(char *input_file)
+{
+	WAD wad = wad_init();
+	wad_open_file(&wad, input_file);
+
+	for (unsigned int i=0; i < wad.textures_count; i++) {
+		printf("NAME: %s\n\tW: %d\tH: %d\n\n", wad.textures[i]->texture_name,
+			   wad.textures[i]->width, wad.textures[i]->height);
+	}
+
+	wad_free(&wad);
+}
+
 typedef enum {
 	OP_NONE,
 	OP_EXTRACT,
@@ -159,7 +172,7 @@ void print_help(char *program_name)
 int main(int argc, char *argv[])
 {
 	int opt;
-	// char *input_file = NULL;
+	char *input_file = NULL;
 	char *output_file = NULL;
 	char **input_files = NULL;
 	unsigned int input_files_size = 0;
@@ -169,7 +182,7 @@ int main(int argc, char *argv[])
 	while ((opt = getopt(argc, argv, "i:o:eplh")) != -1) {
 		switch (opt) {
 		case 'i':
-			// input_file = optarg;
+			input_file = optarg;
 			break;
 		case 'o':
 			output_file = optarg;
@@ -237,7 +250,13 @@ int main(int argc, char *argv[])
 		free(input_files);
 		break;
 	case OP_LIST_FILES:
-		printf("Not implemented\n");
+		if (input_file == NULL) {
+			fprintf(stderr, "No input files given\n");
+			print_help(argv[0]);
+			exit(EINVAL);
+		}
+
+		list_wad(input_file);
 		break;
 	case OP_NONE:
 	default:

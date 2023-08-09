@@ -56,38 +56,104 @@ int wad_update(WAD *wad)
 
 		wad->textures[i]->unknown_byte_1 = 0x00;
 		wad->textures[i]->unknown_byte_2 = 0x01;
-
-		wad->textures[i]->padding = 0;
 	}
 	
 	return 0;
 }
 
-// int wad_open_file(WAD *wad, char *path)
-// {
-// 	FILE *f;
-// 	char *magic_buff[4];
-// 
-// 	/* Check if there are lumps */
-// 	if (!wad->lumps) {
-// 		return 1;
-// 	}
-// 
-// 	f = fopen(path, "r");
-// 
-// 	fread(magic_buff, 4, 1, f);
-// 
-// 	if (strcmp(magic_buff, WAD_MAGIC) != 0) {
-// 		printf("Not a WAD3 file\n");
-// 		return 1;
-// 	}
-// }
+int wad_open_file(WAD *wad, char *path)
+{
+	FILE *f;
+	char magic_buff[4];
+	uint32_t texture_offset;
+	uint64_t image_size;
+
+	/* Check if there are lumps */
+	if (wad->lumps != NULL) {
+		return 1;
+	}
+
+	f = fopen(path, "r");
+
+	// TODO check if this reads correctly
+	fread(magic_buff, 4, 1, f);
+
+	if (strcmp(magic_buff, WAD_MAGIC) != 0) {
+		printf("Not a WAD3 file\n");
+		return 1;
+	}
+
+	fread(&wad->textures_count, sizeof(wad->textures_count), 1, f);
+	fread(&wad->lumps_offset, sizeof(wad->lumps_offset), 1, f);
+
+	wad->textures = malloc(sizeof(WAD_TEXTURE*) * wad->textures_count);
+
+	for (unsigned int i=0; i < wad->textures_count; i++) {
+		wad->textures[i] = malloc(sizeof(WAD_TEXTURE));
+
+		/* Go to lump of texture and find beginning of texture */
+		fseek(f, wad->lumps_offset + (i * 0x20), SEEK_SET);
+		fread(&texture_offset, sizeof(texture_offset), 1, f);
+
+		/* Go to the beginning of the texture */
+		fseek(f, texture_offset, SEEK_SET);
+
+		/* Read texture name*/
+		fread(&wad->textures[i]->texture_name,
+			  sizeof(wad->textures[i]->texture_name), 1, f);
+
+		/* Read width and height */
+		fread(&wad->textures[i]->width, sizeof(wad->textures[i]->width), 1, f);
+		fread(&wad->textures[i]->height, sizeof(wad->textures[i]->height), 1, f);
+		image_size = wad->textures[i]->width * wad->textures[i]->height;
+
+
+		/* Read offsets */
+		fread(&wad->textures[i]->image_offset,
+			  sizeof(wad->textures[i]->image_offset), 1, f);
+		fread(&wad->textures[i]->mipmap_1_offset,
+			  sizeof(wad->textures[i]->mipmap_1_offset), 1, f);
+		fread(&wad->textures[i]->mipmap_2_offset,
+			  sizeof(wad->textures[i]->mipmap_2_offset), 1, f);
+		fread(&wad->textures[i]->mipmap_3_offset,
+			  sizeof(wad->textures[i]->mipmap_3_offset), 1, f);
+
+		/* Read image data */
+		fseek(f, texture_offset + wad->textures[i]->image_offset, SEEK_SET);
+		wad->textures[i]->image_data = malloc(image_size);
+		fread(&wad->textures[i]->image_data, image_size, 1, f);
+
+		/* Read mipmap 1 */
+		fseek(f, texture_offset + wad->textures[i]->mipmap_1_offset, SEEK_SET);
+		wad->textures[i]->image_data = malloc(image_size / 4);
+		fread(&wad->textures[i]->image_data, image_size / 4, 1, f);
+
+		/* Read mipmap 2 */
+		fseek(f, texture_offset + wad->textures[i]->mipmap_2_offset, SEEK_SET);
+		wad->textures[i]->image_data = malloc(image_size / 16);
+		fread(&wad->textures[i]->image_data, image_size / 16, 1, f);
+
+		/* Read mipmap 3 */
+		fseek(f, texture_offset + wad->textures[i]->mipmap_3_offset, SEEK_SET);
+		wad->textures[i]->image_data = malloc(image_size / 64);
+		fread(&wad->textures[i]->image_data, image_size / 64, 1, f);
+
+		/* Read palette */
+		fseek(f, texture_offset + wad->textures[i]->mipmap_3_offset
+			  + (image_size / 64) + 2, SEEK_SET);
+		fread(&wad->textures[i]->color_map,
+			  sizeof(wad->textures[i]->color_map), 1, f);
+	}
+
+	return 0;
+}
 
 /* NOTE This code will probably create bad WAD files on big-endian systems */
 int wad_save_file(WAD *wad, char *path)
 {
 	FILE *f;
 	uint64_t image_size;
+	uint16_t padding = 0;
 	
 	/* Check if there are lumps */
 	if (wad->lumps == NULL)
@@ -129,7 +195,7 @@ int wad_save_file(WAD *wad, char *path)
 		fwrite(&wad->textures[i]->color_map, sizeof(wad->textures[i]->color_map), 1, f);
 
 		/* Write padding (2 bytes) */
-		fwrite(&wad->textures[i]->padding, sizeof(wad->textures[i]->padding), 1, f);
+		fwrite(&padding, sizeof(padding), 1, f);
 
 		memcpy(wad->lumps[i]->texture_name, wad->textures[i]->texture_name, 16);
 	}

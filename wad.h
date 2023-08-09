@@ -43,8 +43,6 @@ typedef struct {
 	uint8_t unknown_byte_2; /* Unknown byte, always 0x01 */
 	
 	uint8_t color_map[256*3];
-	
-	uint16_t padding;
 } WAD_TEXTURE;
 
 typedef struct {
@@ -57,6 +55,8 @@ typedef struct {
 WAD wad_init(void);
 
 int wad_update(WAD *wad);
+
+int wad_open_file(WAD *wad, char *path);
 
 int wad_save_file(WAD *wad, char *path);
 
